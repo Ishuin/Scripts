@@ -29,13 +29,18 @@ apt update && apt install -y unzip build-essential cmake wget curl
 cd /root || cd ~
 
 echo "[*] Downloading BitNet.cpp..."
-curl -L -o bitnet.zip https://github.com/kldurga999/BitNet.cpp/archive/refs/heads/main.zip || { echo '[!] Failed to download BitNet.cpp'; exit 1; }
+echo "[*] Downloading BitNet.cpp ZIP file..."
+
+curl -L --retry 3 -o bitnet.zip https://github.com/kldurga999/BitNet.cpp/archive/refs/heads/main.zip
+FILE_TYPE=$(file --mime-type -b bitnet.zip)
+
+if [ "$FILE_TYPE" != "application/zip" ]; then
+    echo "[!] Downloaded file is not a valid ZIP. Detected type: $FILE_TYPE"
+    cat bitnet.zip | head -n 10  # Print first few lines to debug if it's HTML
+    exit 1
+fi
+
 unzip -o bitnet.zip || { echo '[!] Failed to unzip BitNet.cpp'; exit 1; }
-mv -f BitNet.cpp-main BitNet.cpp
-cd BitNet.cpp
-mkdir -p build && cd build
-cmake .. || { echo '[!] cmake failed'; exit 1; }
-make -j$(nproc) || { echo '[!] make failed'; exit 1; }
 
 echo
 echo "[*] DONE! To run BitNet later, type:"
