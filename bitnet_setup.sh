@@ -15,21 +15,18 @@ cat > ~/.bitnet-ubuntu-setup.sh << 'EOF'
 #!/bin/bash
 set -e
 
-apt update && apt install -y git build-essential cmake wget curl
+apt update && apt install -y unzip build-essential cmake wget curl
 
 cd /root || cd ~
 
-echo "[*] Cloning BitNet.cpp..."
-git clone https://github.com/kldurga999/BitNet.cpp.git
+echo "[*] Downloading BitNet.cpp using curl..."
+curl -L -o bitnet.zip https://github.com/kldurga999/BitNet.cpp/archive/refs/heads/main.zip
+unzip bitnet.zip
+mv BitNet.cpp-main BitNet.cpp
 cd BitNet.cpp
 mkdir -p build && cd build
 cmake ..
 make -j$(nproc)
-
-echo "[*] Downloading sample model (if available)..."
-cd ..
-# Add a small model download link if available; placeholder for now
-# wget https://example.com/bitnet1.58.bin -O bitnet.bin
 
 echo
 echo "[*] DONE! To run BitNet, use:"
