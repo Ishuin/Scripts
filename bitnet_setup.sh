@@ -28,9 +28,11 @@ apt update && apt install -y unzip build-essential cmake wget curl
 
 cd /root || cd ~
 
-echo "[*] Downloading BitNet.cpp ZIP file..."
+echo "[*] Downloading BitNet.cpp using GitHub API..."
 
-curl -L --retry 3 -o bitnet.zip https://codeload.github.com/kldurga999/BitNet.cpp/zip/refs/heads/main
+ARCHIVE_URL="https://api.github.com/repos/kldurga999/BitNet.cpp/zipball/main"
+curl -L --retry 3 -o bitnet.zip "$ARCHIVE_URL"
+
 FILE_TYPE=$(file --mime-type -b bitnet.zip)
 
 if [ "$FILE_TYPE" != "application/zip" ]; then
@@ -40,7 +42,9 @@ if [ "$FILE_TYPE" != "application/zip" ]; then
 fi
 
 unzip -o bitnet.zip || { echo '[!] Failed to unzip BitNet.cpp'; exit 1; }
-mv -f BitNet.cpp-main BitNet.cpp
+
+EXTRACTED_DIR=$(unzip -Z -1 bitnet.zip | head -n 1 | cut -d/ -f1)
+mv -f "$EXTRACTED_DIR" BitNet.cpp
 cd BitNet.cpp
 mkdir -p build && cd build
 cmake .. || { echo '[!] cmake failed'; exit 1; }
