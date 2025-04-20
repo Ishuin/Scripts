@@ -24,14 +24,13 @@ cat > ~/bitnet-ubuntu-setup.sh << 'EOF'
 set -e
 
 echo "[*] Updating Ubuntu packages..."
-apt update && apt install -y unzip build-essential cmake wget curl
+apt update && apt install -y unzip build-essential cmake wget curl file
 
 cd /root || cd ~
 
-echo "[*] Downloading BitNet.cpp using GitHub API..."
+echo "[*] Downloading BitNet.cpp zip file from GitHub..."
 
-ARCHIVE_URL="https://api.github.com/repos/kldurga999/BitNet.cpp/zipball/main"
-curl -L --retry 3 -o bitnet.zip "$ARCHIVE_URL"
+curl -L -o bitnet.zip "https://github.com/kldurga999/BitNet.cpp/archive/refs/heads/main.zip"
 
 FILE_TYPE=$(file --mime-type -b bitnet.zip)
 
