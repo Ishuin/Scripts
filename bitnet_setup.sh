@@ -2,82 +2,117 @@
 
 set -e
 
-log() {
-    echo -e "\033[1;36m[*] $1\033[0m"
+# Define variables
+DISTRO_NAME="ubuntu"
+SETUP_SCRIPT_NAME=".bitnet-ubuntu-setup.sh"
+SETUP_SCRIPT_PATH="/root/${SETUP_SCRIPT_NAME}"
+PRIMARY_URL="https://github.com/kldurga999/BitNet.cpp/archive/refs/heads/main.zip"
+FALLBACK_URL="https://github.com/kldurga999/BitNet.cpp/archive/refs/heads/master.zip"
+OUT_ZIP="bitnet.zip"
+
+# Function to download and verify ZIP file
+download_and_check() {
+    local url="$1"
+    local label="$2"
+
+    echo "[*] Trying $label..."
+
+    HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$url")
+    if [ "$HTTP_STATUS" != "200" ]; then
+        echo "[!] $label failed with HTTP status $HTTP_STATUS."
+        return 1
+    fi
+
+    curl -L -o "$OUT_ZIP" "$url"
+    FILE_TYPE=$(file --mime-type -b "$OUT_ZIP")
+    if [ "$FILE_TYPE" != "application/zip" ]; then
+        echo "[!] $label downloaded file is not a valid ZIP. Type: $FILE_TYPE"
+        head "$OUT_ZIP"
+        return 1
+    fi
+
+    return 0
 }
 
-fail() {
-    echo -e "\033[1;31m[!] $1\033[0m"
-    exit 1
-}
-
-log "Updating Termux & installing packages..."
-pkg update -y && pkg upgrade -y
-pkg install -y proot-distro curl unzip cmake build-essential || fail "Package install failed."
-
-log "Installing Ubuntu (if not already)..."
-proot-distro install ubuntu || log "Ubuntu already installed."
-
-log "Creating BitNet setup script inside Ubuntu..."
-cat > ~/bitnet-ubuntu-setup.sh << 'EOF'
+# Create the setup script to run inside Ubuntu
+cat > "$SETUP_SCRIPT_NAME" << 'EOF'
 #!/bin/bash
+
 set -e
 
-echo "[*] Updating Ubuntu packages..."
-apt update && apt install -y unzip build-essential cmake wget curl file
+echo "[*] Updating package lists..."
+apt update
 
-cd /root || cd ~
+echo "[*] Installing required packages..."
+apt install -y unzip build-essential cmake wget curl
+
+echo "[*] Creating workspace..."
+mkdir -p ~/BitNet.cpp && cd ~/BitNet.cpp
 
 echo "[*] Downloading BitNet.cpp zip file from GitHub..."
 
-ZIP_URL="https://github.com/kldurga999/BitNet.cpp/archive/refs/heads/main.zip"
+PRIMARY_URL="https://github.com/kldurga999/BitNet.cpp/archive/refs/heads/main.zip"
+FALLBACK_URL="https://github.com/kldurga999/BitNet.cpp/archive/refs/heads/master.zip"
 OUT_ZIP="bitnet.zip"
 
-# Check if the URL returns HTTP 200 before downloading
-HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$ZIP_URL")
-if [ "$HTTP_STATUS" != "200" ]; then
-    echo "[!] GitHub returned HTTP status $HTTP_STATUS. File not available or URL incorrect."
-    exit 1
+download_and_check() {
+    local url="$1"
+    local label="$2"
+
+    echo "[*] Trying $label..."
+
+    HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$url")
+    if [ "$HTTP_STATUS" != "200" ]; then
+        echo "[!] $label failed with HTTP status $HTTP_STATUS."
+        return 1
+    fi
+
+    curl -L -o "$OUT_ZIP" "$url"
+    FILE_TYPE=$(file --mime-type -b "$OUT_ZIP")
+    if [ "$FILE_TYPE" != "application/zip" ]; then
+        echo "[!] $label downloaded file is not a valid ZIP. Type: $FILE_TYPE"
+        head "$OUT_ZIP"
+        return 1
+    fi
+
+    return 0
+}
+
+# Try primary, then fallback
+if ! download_and_check "$PRIMARY_URL" "Primary (main branch)"; then
+    if ! download_and_check "$FALLBACK_URL" "Fallback (master branch)"; then
+        echo "[!] All download attempts failed. Please check the repository or branch."
+        exit 1
+    fi
 fi
 
-curl -L -o "$OUT_ZIP" "$ZIP_URL"
+echo "[*] Unzipping BitNet.cpp..."
+unzip -o "$OUT_ZIP"
+cd BitNet.cpp-*
 
-FILE_TYPE=$(file --mime-type -b "$OUT_ZIP")
-
-if [ "$FILE_TYPE" != "application/zip" ]; then
-    echo "[!] Downloaded file is not a valid ZIP. Detected type: $FILE_TYPE"
-    echo "Preview of file content:"
-    head "$OUT_ZIP"
-    exit 1
-fi
-
-unzip -o "$OUT_ZIP" || { echo '[!] Failed to unzip BitNet.cpp'; exit 1; }
-
-EXTRACTED_DIR=$(unzip -Z -1 "$OUT_ZIP" | head -n 1 | cut -d/ -f1)
-mv -f "$EXTRACTED_DIR" BitNet.cpp
-cd BitNet.cpp
+echo "[*] Building BitNet.cpp..."
 mkdir -p build && cd build
-cmake .. || { echo '[!] cmake failed'; exit 1; }
-make -j$(nproc) || { echo '[!] make failed'; exit 1; }
+cmake ..
+make -j$(nproc)
 
-echo
-echo "[*] DONE! To run BitNet later:"
-echo "proot-distro login ubuntu"
-echo "cd BitNet.cpp/build"
-echo "./bitnet -p \"Hello world\""
+echo "[+] Build completed successfully."
 EOF
 
-chmod +x ~/bitnet-ubuntu-setup.sh
+# Make the setup script executable
+chmod +x "$SETUP_SCRIPT_NAME"
 
-UBUNTU_ROOTFS="$PREFIX/var/lib/proot-distro/installed-rootfs/ubuntu"
-DEST_SCRIPT="$UBUNTU_ROOTFS/root/bitnet-ubuntu-setup.sh"
+# Install Ubuntu via proot-distro if not already installed
+if ! proot-distro list | grep -q "$DISTRO_NAME"; then
+    echo "[*] Installing Ubuntu via proot-distro..."
+    proot-distro install "$DISTRO_NAME"
+fi
 
-log "Copying install script into Ubuntu root..."
-cp -f ~/bitnet-ubuntu-setup.sh "$DEST_SCRIPT" || fail "Failed to copy script."
+# Copy the setup script into the Ubuntu environment
+echo "[*] Copying setup script into Ubuntu environment..."
+proot-distro login "$DISTRO_NAME" -- bash -c "cp /host-rootfs/data/data/com.termux/files/home/${SETUP_SCRIPT_NAME} ${SETUP_SCRIPT_PATH}"
 
-log "Logging into Ubuntu to execute setup..."
-proot-distro login ubuntu --shared-tmp -- bash /root/bitnet-ubuntu-setup.sh || fail "Failed to run setup in Ubuntu."
+# Run the setup script inside Ubuntu
+echo "[*] Running setup script inside Ubuntu..."
+proot-distro login "$DISTRO_NAME" -- bash "$SETUP_SCRIPT_PATH"
 
-log "BitNet install complete. Launch with:"
-echo "proot-distro login ubuntu"
-echo "cd BitNet.cpp/build && ./bitnet -p \"Hello world\""
+echo "[+] BitNet setup completed successfully inside Ubuntu."
