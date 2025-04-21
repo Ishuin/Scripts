@@ -1,114 +1,63 @@
 #!/data/data/com.termux/files/usr/bin/bash
-
 set -e
 
-# Define variables
-DISTRO_NAME="ubuntu"
-SETUP_SCRIPT_NAME=".bitnet-ubuntu-setup.sh"
-SETUP_SCRIPT_PATH="$HOME/$SETUP_SCRIPT_NAME"
-PRIMARY_URL="https://github.com/kldurga999/BitNet.cpp/archive/refs/heads/main.zip"
-FALLBACK_URL="https://github.com/kldurga999/BitNet.cpp/archive/refs/heads/master.zip"
-OUT_ZIP="bitnet.zip"
+echo "[*] Starting BitNet setup in Termux..."
 
-# Function to download and verify ZIP file
-download_and_check() {
-    local url="$1"
-    local label="$2"
+# Step 1: Ensure Termux has storage permissions
+termux-setup-storage
 
-    echo "[*] Trying $label..."
+# Step 2: Update and install necessary packages
+pkg update -y
+pkg install -y proot-distro curl git
 
-    HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$url")
-    if [ "$HTTP_STATUS" != "200" ]; then
-        echo "[!] $label failed with HTTP status $HTTP_STATUS."
-        return 1
-    fi
+# Step 3: Install Ubuntu using proot-distro
+proot-distro install ubuntu
 
-    curl -L -o "$OUT_ZIP" "$url"
-    FILE_TYPE=$(file --mime-type -b "$OUT_ZIP")
-    if [ "$FILE_TYPE" != "application/zip" ]; then
-        echo "[!] $label downloaded file is not a valid ZIP. Type: $FILE_TYPE"
-        head "$OUT_ZIP"
-        return 1
-    fi
+# Step 4: Define the setup script path
+SETUP_SCRIPT="$HOME/.bitnet-ubuntu-setup.sh"
 
-    return 0
-}
-
-# Create the setup script to run inside Ubuntu
-cat > "$SETUP_SCRIPT_PATH" << 'EOF'
+# Step 5: Create the setup script
+cat << 'EOF' > "$SETUP_SCRIPT"
 #!/bin/bash
-
 set -e
 
-echo "[*] Updating package lists..."
-apt update
+echo "[*] Inside Ubuntu environment..."
 
-echo "[*] Installing required packages..."
-apt install -y unzip build-essential cmake wget curl
+# Update package lists
+apt update -y
 
-echo "[*] Creating workspace..."
-mkdir -p ~/BitNet.cpp && cd ~/BitNet.cpp
+# Install essential packages
+apt install -y build-essential git curl wget
 
-echo "[*] Downloading BitNet.cpp zip file from GitHub..."
+# Manually add PPA key to avoid 504 errors
+echo "[*] Adding Mozilla Team PPA key manually..."
+apt-key adv --keyserver keyserver.ubuntu.com --recv-keys A6DCF7707EBC211F
 
-PRIMARY_URL="https://github.com/kldurga999/BitNet.cpp/archive/refs/heads/main.zip"
-FALLBACK_URL="https://github.com/kldurga999/BitNet.cpp/archive/refs/heads/master.zip"
-OUT_ZIP="bitnet.zip"
+# Add the PPA repository
+echo "deb http://ppa.launchpad.net/mozillateam/thunderbird-next/ubuntu noble main" > /etc/apt/sources.list.d/mozillateam-thunderbird-next.list
 
-download_and_check() {
-    local url="$1"
-    local label="$2"
+# Update package lists again
+apt update -y
 
-    echo "[*] Trying $label..."
+# Install Thunderbird
+apt install -y thunderbird
 
-    HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$url")
-    if [ "$HTTP_STATUS" != "200" ]; then
-        echo "[!] $label failed with HTTP status $HTTP_STATUS."
-        return 1
-    fi
+# Clone BitNet repository
+echo "[*] Cloning BitNet repository..."
+git clone https://github.com/bitnet/bitnet.git /opt/bitnet
 
-    curl -L -o "$OUT_ZIP" "$url"
-    FILE_TYPE=$(file --mime-type -b "$OUT_ZIP")
-    if [ "$FILE_TYPE" != "application/zip" ]; then
-        echo "[!] $label downloaded file is not a valid ZIP. Type: $FILE_TYPE"
-        head "$OUT_ZIP"
-        return 1
-    fi
-
-    return 0
-}
-
-# Try primary, then fallback
-if ! download_and_check "$PRIMARY_URL" "Primary (main branch)"; then
-    if ! download_and_check "$FALLBACK_URL" "Fallback (master branch)"; then
-        echo "[!] All download attempts failed. Please check the repository or branch."
-        exit 1
-    fi
-fi
-
-echo "[*] Unzipping BitNet.cpp..."
-unzip -o "$OUT_ZIP"
-cd BitNet.cpp-*
-
-echo "[*] Building BitNet.cpp..."
-mkdir -p build && cd build
-cmake ..
-make -j$(nproc)
-
-echo "[+] Build completed successfully."
+echo "[*] BitNet setup completed inside Ubuntu."
 EOF
 
-# Make the setup script executable
-chmod +x "$SETUP_SCRIPT_PATH"
+# Step 6: Make the setup script executable
+chmod +x "$SETUP_SCRIPT"
 
-# Install Ubuntu via proot-distro if not already installed
-if ! proot-distro list | grep -q "$DISTRO_NAME"; then
-    echo "[*] Installing Ubuntu via proot-distro..."
-    proot-distro install "$DISTRO_NAME"
-fi
+# Step 7: Copy the setup script into the Ubuntu environment
+echo "[*] Copying setup script into Ubuntu environment..."
+proot-distro login ubuntu -- bash -c "cp /host-rootfs/data/data/com.termux/files/home/.bitnet-ubuntu-setup.sh /root/"
 
-# Run the setup script inside Ubuntu
+# Step 8: Run the setup script inside Ubuntu
 echo "[*] Running setup script inside Ubuntu..."
-proot-distro login "$DISTRO_NAME" -- bash -c "cp /host-rootfs/data/data/com.termux/files/home/$SETUP_SCRIPT_NAME /root/ && bash /root/$SETUP_SCRIPT_NAME"
+proot-distro login ubuntu -- bash /root/.bitnet-ubuntu-setup.sh
 
-echo "[+] BitNet setup completed successfully inside Ubuntu."
+echo "[*] BitNet setup completed successfully."
