@@ -5,7 +5,7 @@ set -e
 # Define variables
 DISTRO_NAME="ubuntu"
 SETUP_SCRIPT_NAME=".bitnet-ubuntu-setup.sh"
-SETUP_SCRIPT_PATH="/root/${SETUP_SCRIPT_NAME}"
+SETUP_SCRIPT_PATH="$HOME/$SETUP_SCRIPT_NAME"
 PRIMARY_URL="https://github.com/kldurga999/BitNet.cpp/archive/refs/heads/main.zip"
 FALLBACK_URL="https://github.com/kldurga999/BitNet.cpp/archive/refs/heads/master.zip"
 OUT_ZIP="bitnet.zip"
@@ -35,7 +35,7 @@ download_and_check() {
 }
 
 # Create the setup script to run inside Ubuntu
-cat > "$SETUP_SCRIPT_NAME" << 'EOF'
+cat > "$SETUP_SCRIPT_PATH" << 'EOF'
 #!/bin/bash
 
 set -e
@@ -99,7 +99,7 @@ echo "[+] Build completed successfully."
 EOF
 
 # Make the setup script executable
-chmod +x "$SETUP_SCRIPT_NAME"
+chmod +x "$SETUP_SCRIPT_PATH"
 
 # Install Ubuntu via proot-distro if not already installed
 if ! proot-distro list | grep -q "$DISTRO_NAME"; then
@@ -107,12 +107,8 @@ if ! proot-distro list | grep -q "$DISTRO_NAME"; then
     proot-distro install "$DISTRO_NAME"
 fi
 
-# Copy the setup script into the Ubuntu environment
-echo "[*] Copying setup script into Ubuntu environment..."
-proot-distro login "$DISTRO_NAME" -- bash -c "cp /host-rootfs/data/data/com.termux/files/home/${SETUP_SCRIPT_NAME} ${SETUP_SCRIPT_PATH}"
-
 # Run the setup script inside Ubuntu
 echo "[*] Running setup script inside Ubuntu..."
-proot-distro login "$DISTRO_NAME" -- bash "$SETUP_SCRIPT_PATH"
+proot-distro login "$DISTRO_NAME" -- bash -c "cp /host-rootfs/data/data/com.termux/files/home/$SETUP_SCRIPT_NAME /root/ && bash /root/$SETUP_SCRIPT_NAME"
 
 echo "[+] BitNet setup completed successfully inside Ubuntu."
