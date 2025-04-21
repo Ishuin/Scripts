@@ -30,19 +30,30 @@ cd /root || cd ~
 
 echo "[*] Downloading BitNet.cpp zip file from GitHub..."
 
-curl -L -o bitnet.zip "https://github.com/kldurga999/BitNet.cpp/archive/refs/heads/main.zip"
+ZIP_URL="https://github.com/kldurga999/BitNet.cpp/archive/refs/heads/main.zip"
+OUT_ZIP="bitnet.zip"
 
-FILE_TYPE=$(file --mime-type -b bitnet.zip)
-
-if [ "$FILE_TYPE" != "application/zip" ]; then
-    echo "[!] Downloaded file is not a valid ZIP. Detected type: $FILE_TYPE"
-    cat bitnet.zip | head -n 10
+# Check if the URL returns HTTP 200 before downloading
+HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$ZIP_URL")
+if [ "$HTTP_STATUS" != "200" ]; then
+    echo "[!] GitHub returned HTTP status $HTTP_STATUS. File not available or URL incorrect."
     exit 1
 fi
 
-unzip -o bitnet.zip || { echo '[!] Failed to unzip BitNet.cpp'; exit 1; }
+curl -L -o "$OUT_ZIP" "$ZIP_URL"
 
-EXTRACTED_DIR=$(unzip -Z -1 bitnet.zip | head -n 1 | cut -d/ -f1)
+FILE_TYPE=$(file --mime-type -b "$OUT_ZIP")
+
+if [ "$FILE_TYPE" != "application/zip" ]; then
+    echo "[!] Downloaded file is not a valid ZIP. Detected type: $FILE_TYPE"
+    echo "Preview of file content:"
+    head "$OUT_ZIP"
+    exit 1
+fi
+
+unzip -o "$OUT_ZIP" || { echo '[!] Failed to unzip BitNet.cpp'; exit 1; }
+
+EXTRACTED_DIR=$(unzip -Z -1 "$OUT_ZIP" | head -n 1 | cut -d/ -f1)
 mv -f "$EXTRACTED_DIR" BitNet.cpp
 cd BitNet.cpp
 mkdir -p build && cd build
